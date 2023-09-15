@@ -6,38 +6,46 @@ h1 {
     margin-bottom: 50px;
 }
 
-.MenuItem {
+nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #333;
+  color: white;
+  padding: 10px;
+}
+
+nav ul {
   list-style: none;
   padding: 0;
   display: flex;
-}
-
-.MenuItem li {
   margin: 0;
-  padding: 10px;
-  border-right: 1px solid #030303;
-  flex-grow: 1;
+}
+
+nav li {
+  margin: 0;
+  padding: 0;
   display: flex;
-  justify-content: center;
   align-items: center;
 }
 
-.MenuItem li:last-child {
-  border-right: none;
+nav li:not(:last-child) {
+  margin-right: 20px;
 }
 
-.MenuItem li a {
-  font-size: 20px;
+nav a {
   text-decoration: none;
-  color: #333;
+  color: white;
+  font-size: 20px;
 }
 
-.main-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+nav a:hover {
+  text-decoration: underline;
+}
 
+.main-logo {
+  margin: 0 auto;
+  display: block;
 }
 
 .Description {
@@ -45,9 +53,5 @@ h1 {
   font-weight: bold;
   text-align: center;
   margin: 50px 0 20px 0;
+  color: #333;
 }
-
-.main-logo {
-  margin-top: 50px;
-}
-

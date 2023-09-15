@@ -1,7 +1,7 @@
 import React from 'react';
 import LogoComponent from './Logo.jsx';
 import Description from './Description.jsx';
-import logo from '../../../static/download.png'
+import logo from '../../../static/download.png';
 
 const Main = () => {
     return (
