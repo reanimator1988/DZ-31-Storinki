@@ -7077,7 +7077,7 @@ var Contacts = function Contacts() {
 
 var App = function App() {
   return /*#__PURE__*/react.createElement(react.Fragment, null, /*#__PURE__*/react.createElement(Header_Header, null), /*#__PURE__*/react.createElement(Routes, null, /*#__PURE__*/react.createElement(Route, {
-    path: "*",
+    path: "/",
     element: /*#__PURE__*/react.createElement(Main_Main, null)
   }), /*#__PURE__*/react.createElement(Route, {
     path: "/questions",
