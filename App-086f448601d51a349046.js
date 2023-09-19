@@ -596,7 +596,7 @@ var react_namespaceObject = /*#__PURE__*/__webpack_require__.t(react, 2);
 var client = __webpack_require__(745);
 ;// CONCATENATED MODULE: ./node_modules/@remix-run/router/dist/router.js
 /**
- * @remix-run/router v1.8.0
+ * @remix-run/router v1.9.0
  *
  * Copyright (c) Remix Software Inc.
  *
@@ -845,7 +845,7 @@ function warning(cond, message) {
     try {
       // Welcome to debugging history!
       //
-      // This error is thrown as a convenience so you can more easily
+      // This error is thrown as a convenience, so you can more easily
       // find the source for a warning that appears in the console by
       // enabling "pause on exceptions" in your JavaScript debugger.
       throw new Error(message);
@@ -1069,7 +1069,7 @@ const immutableRouteKeys = new Set(["lazy", "caseSensitive", "path", "id", "inde
 function isIndexRoute(route) {
   return route.index === true;
 }
-// Walk the route tree generating unique IDs where necessary so we are working
+// Walk the route tree generating unique IDs where necessary, so we are working
 // solely with AgnosticDataRouteObject's within the Router
 function convertRoutesToDataRoutes(routes, mapRouteProperties, parentPath, manifest) {
   if (parentPath === void 0) {
@@ -1131,6 +1131,20 @@ function matchRoutes(routes, locationArg, basename) {
   }
   return matches;
 }
+function convertRouteMatchToUiMatch(match, loaderData) {
+  let {
+    route,
+    pathname,
+    params
+  } = match;
+  return {
+    id: route.id,
+    pathname,
+    params,
+    data: loaderData[route.id],
+    handle: route.handle
+  };
+}
 function flattenRoutes(routes, branches, parentsMeta, parentPath) {
   if (branches === void 0) {
     branches = [];
@@ -1154,7 +1168,7 @@ function flattenRoutes(routes, branches, parentsMeta, parentPath) {
     }
     let path = router_joinPaths([parentPath, meta.relativePath]);
     let routesMeta = parentsMeta.concat(meta);
-    // Add the children before adding this route to the array so we traverse the
+    // Add the children before adding this route to the array, so we traverse the
     // route tree depth-first and child routes appear before their parents in
     // the "flattened" version.
     if (route.children && route.children.length > 0) {
@@ -1218,14 +1232,14 @@ function explodeOptionalSegments(path) {
   let restExploded = explodeOptionalSegments(rest.join("/"));
   let result = [];
   // All child paths with the prefix.  Do this for all children before the
-  // optional version for all children so we get consistent ordering where the
+  // optional version for all children, so we get consistent ordering where the
   // parent optional aspect is preferred as required.  Otherwise, we can get
   // child sections interspersed where deeper optional segments are higher than
-  // parent optional segments, where for example, /:two would explodes _earlier_
+  // parent optional segments, where for example, /:two would explode _earlier_
   // then /:one.  By always including the parent as required _for all children_
   // first, we avoid this issue
   result.push(...restExploded.map(subpath => subpath === "" ? required : [required, subpath].join("/")));
-  // Then if this is an optional value, add all child versions without
+  // Then, if this is an optional value, add all child versions without
   if (isOptional) {
     result.push(...restExploded);
   }
@@ -1399,7 +1413,7 @@ function compilePath(path, caseSensitive, end) {
     regexpSource += "\\/*$";
   } else if (path !== "" && path !== "/") {
     // If our path is non-empty and contains anything beyond an initial slash,
-    // then we have _some_ form of path in our regex so we should expect to
+    // then we have _some_ form of path in our regex, so we should expect to
     // match only if we find the end of this path segment.  Look for an optional
     // non-captured trailing slash (to match a portion of the URL) or the end
     // of the path (if we've matched to the end).  We used to do this with a
@@ -1787,7 +1801,7 @@ const redirectDocument = (url, init) => {
  * @private
  * Utility class we use to hold auto-unwrapped 4xx/5xx Response bodies
  */
-class router_ErrorResponse {
+class ErrorResponseImpl {
   constructor(status, statusText, data, internal) {
     if (internal === void 0) {
       internal = false;
@@ -2647,8 +2661,7 @@ function router_createRouter(init) {
           fetchers: new Map(state.fetchers)
         });
         return startRedirectNavigation(state, actionResult, {
-          submission,
-          isFetchActionRedirect: true
+          fetcherSubmission: submission
         });
       }
     }
@@ -2849,18 +2862,15 @@ function router_createRouter(init) {
   async function startRedirectNavigation(state, redirect, _temp) {
     let {
       submission,
-      replace,
-      isFetchActionRedirect
+      fetcherSubmission,
+      replace
     } = _temp === void 0 ? {} : _temp;
     if (redirect.revalidate) {
       isRevalidationRequired = true;
     }
-    let redirectLocation = createLocation(state.location, redirect.location, // TODO: This can be removed once we get rid of useTransition in Remix v2
-    _extends({
+    let redirectLocation = createLocation(state.location, redirect.location, {
       _isRedirect: true
-    }, isFetchActionRedirect ? {
-      _isFetchActionRedirect: true
-    } : {}));
+    });
     invariant(redirectLocation, "Expected a location on the redirect navigation");
     if (isBrowser) {
       let isDocumentReload = false;
@@ -2890,10 +2900,18 @@ function router_createRouter(init) {
     let redirectHistoryAction = replace === true ? Action.Replace : Action.Push;
     // Use the incoming submission if provided, fallback on the active one in
     // state.navigation
-    let activeSubmission = submission || getSubmissionFromNavigation(state.navigation);
+    let {
+      formMethod,
+      formAction,
+      formEncType
+    } = state.navigation;
+    if (!submission && !fetcherSubmission && formMethod && formAction && formEncType) {
+      submission = getSubmissionFromNavigation(state.navigation);
+    }
     // If this was a 307/308 submission we want to preserve the HTTP method and
     // re-submit the GET/POST/PUT/PATCH/DELETE as a submission navigation to the
     // redirected location
+    let activeSubmission = submission || fetcherSubmission;
     if (redirectPreserveMethodStatusCodes.has(redirect.status) && activeSubmission && isMutationMethod(activeSubmission.formMethod)) {
       await startNavigation(redirectHistoryAction, redirectLocation, {
         submission: _extends({}, activeSubmission, {
@@ -2902,20 +2920,14 @@ function router_createRouter(init) {
         // Preserve this flag across redirects
         preventScrollReset: pendingPreventScrollReset
       });
-    } else if (isFetchActionRedirect) {
-      // For a fetch action redirect, we kick off a new loading navigation
-      // without the fetcher submission, but we send it along for shouldRevalidate
-      await startNavigation(redirectHistoryAction, redirectLocation, {
-        overrideNavigation: getLoadingNavigation(redirectLocation),
-        fetcherSubmission: activeSubmission,
-        // Preserve this flag across redirects
-        preventScrollReset: pendingPreventScrollReset
-      });
     } else {
-      // If we have a submission, we will preserve it through the redirect navigation
-      let overrideNavigation = getLoadingNavigation(redirectLocation, activeSubmission);
+      // If we have a navigation submission, we will preserve it through the
+      // redirect navigation
+      let overrideNavigation = getLoadingNavigation(redirectLocation, submission);
       await startNavigation(redirectHistoryAction, redirectLocation, {
         overrideNavigation,
+        // Send fetcher submissions through for shouldRevalidate
+        fetcherSubmission,
         // Preserve this flag across redirects
         preventScrollReset: pendingPreventScrollReset
       });
@@ -3123,7 +3135,7 @@ function router_createRouter(init) {
   }
   function getScrollKey(location, matches) {
     if (getScrollRestorationKey) {
-      let key = getScrollRestorationKey(location, matches.map(m => createUseMatchesMatch(m, state.loaderData)));
+      let key = getScrollRestorationKey(location, matches.map(m => convertRouteMatchToUiMatch(m, state.loaderData)));
       return key || location.key;
     }
     return location.key;
@@ -3418,7 +3430,7 @@ function createStaticHandler(routes, opts) {
       });
       if (request.signal.aborted) {
         let method = isRouteRequest ? "queryRoute" : "query";
-        throw new Error(method + "() call aborted");
+        throw new Error(method + "() call aborted: " + request.method + " " + request.url);
       }
     }
     if (isRedirectResult(result)) {
@@ -3533,7 +3545,7 @@ function createStaticHandler(routes, opts) {
     }))]);
     if (request.signal.aborted) {
       let method = isRouteRequest ? "queryRoute" : "query";
-      throw new Error(method + "() call aborted");
+      throw new Error(method + "() call aborted: " + request.method + " " + request.url);
     }
     // Process and commit output from loaders
     let activeDeferreds = new Map();
@@ -3964,7 +3976,17 @@ async function callLoaderOrAction(type, request, match, matches, manifest, mapRo
     if (match.route.lazy) {
       if (handler) {
         // Run statically defined handler in parallel with lazy()
-        let values = await Promise.all([runHandler(handler), loadLazyRouteModule(match.route, mapRouteProperties, manifest)]);
+        let handlerError;
+        let values = await Promise.all([
+        // If the handler throws, don't let it immediately bubble out,
+        // since we need to let the lazy() execution finish so we know if this
+        // route has a boundary that can handle the error
+        runHandler(handler).catch(e => {
+          handlerError = e;
+        }), loadLazyRouteModule(match.route, mapRouteProperties, manifest)]);
+        if (handlerError) {
+          throw handlerError;
+        }
         result = values[0];
       } else {
         // Load lazy route module, then run any returned handler
@@ -4068,7 +4090,7 @@ async function callLoaderOrAction(type, request, match, matches, manifest, mapRo
     if (resultType === ResultType.error) {
       return {
         type: resultType,
-        error: new router_ErrorResponse(status, result.statusText, data),
+        error: new ErrorResponseImpl(status, result.statusText, data),
         headers: result.headers
       };
     }
@@ -4337,7 +4359,7 @@ function getInternalRouterError(status, _temp4) {
       errorMessage = "Invalid request method \"" + method.toUpperCase() + "\"";
     }
   }
-  return new router_ErrorResponse(status || 500, statusText, new Error(errorMessage), true);
+  return new ErrorResponseImpl(status || 500, statusText, new Error(errorMessage), true);
 }
 // Find any returned redirect errors, starting from the lowest match
 function findRedirect(results) {
@@ -4464,22 +4486,6 @@ async function resolveDeferredData(result, signal, unwrap) {
 function hasNakedIndexQuery(search) {
   return new URLSearchParams(search).getAll("index").some(v => v === "");
 }
-// Note: This should match the format exported by useMatches, so if you change
-// this please also change that :)  Eventually we'll DRY this up
-function createUseMatchesMatch(match, loaderData) {
-  let {
-    route,
-    pathname,
-    params
-  } = match;
-  return {
-    id: route.id,
-    pathname,
-    params,
-    data: loaderData[route.id],
-    handle: route.handle
-  };
-}
 function getTargetMatch(matches, location) {
   let search = typeof location === "string" ? parsePath(location).search : location.search;
   if (matches[matches.length - 1].route.index && hasNakedIndexQuery(search || "")) {
@@ -4582,8 +4588,7 @@ function getLoadingFetcher(submission, data) {
       formData: submission.formData,
       json: submission.json,
       text: submission.text,
-      data,
-      " _hasFetcherDoneAnything ": true
+      data
     };
     return fetcher;
   } else {
@@ -4595,8 +4600,7 @@ function getLoadingFetcher(submission, data) {
       formData: undefined,
       json: undefined,
       text: undefined,
-      data,
-      " _hasFetcherDoneAnything ": true
+      data
     };
     return fetcher;
   }
@@ -4610,8 +4614,7 @@ function getSubmittingFetcher(submission, existingFetcher) {
     formData: submission.formData,
     json: submission.json,
     text: submission.text,
-    data: existingFetcher ? existingFetcher.data : undefined,
-    " _hasFetcherDoneAnything ": true
+    data: existingFetcher ? existingFetcher.data : undefined
   };
   return fetcher;
 }
@@ -4624,8 +4627,7 @@ function getDoneFetcher(data) {
     formData: undefined,
     json: undefined,
     text: undefined,
-    data,
-    " _hasFetcherDoneAnything ": true
+    data
   };
   return fetcher;
 }
@@ -4636,7 +4638,7 @@ function getDoneFetcher(data) {
 
 ;// CONCATENATED MODULE: ./node_modules/react-router/dist/index.js
 /**
- * React Router v6.15.0
+ * React Router v6.16.0
  *
  * Copyright (c) Remix Software Inc.
  *
@@ -5249,22 +5251,7 @@ function dist_useMatches() {
     matches,
     loaderData
   } = useDataRouterState(DataRouterStateHook.UseMatches);
-  return React.useMemo(() => matches.map(match => {
-    let {
-      pathname,
-      params
-    } = match;
-    // Note: This structure matches that created by createUseMatchesMatch
-    // in the @remix-run/router , so if you change this please also change
-    // that :)  Eventually we'll DRY this up
-    return {
-      id: match.route.id,
-      pathname,
-      params,
-      data: loaderData[match.route.id],
-      handle: match.route.handle
-    };
-  }), [matches, loaderData]);
+  return React.useMemo(() => matches.map(m => UNSAFE_convertRouteMatchToUiMatch(m, loaderData)), [matches, loaderData]);
 }
 
 /**
@@ -5932,7 +5919,7 @@ function createMemoryRouter(routes, opts) {
 
 ;// CONCATENATED MODULE: ./node_modules/react-router-dom/dist/index.js
 /**
- * React Router DOM v6.15.0
+ * React Router DOM v6.16.0
  *
  * Copyright (c) Remix Software Inc.
  *
@@ -6188,7 +6175,7 @@ function deserializeErrors(errors) {
     // Hey you!  If you change this, please change the corresponding logic in
     // serializeErrors in react-router-dom/server.tsx :)
     if (val && val.__type === "RouteErrorResponse") {
-      serialized[key] = new ErrorResponse(val.status, val.statusText, val.data, val.internal === true);
+      serialized[key] = new UNSAFE_ErrorResponseImpl(val.status, val.statusText, val.data, val.internal === true);
     } else if (val && val.__type === "Error") {
       // Attempt to reconstruct the right type of Error (i.e., ReferenceError)
       if (val.__subType) {
@@ -6256,26 +6243,26 @@ function BrowserRouter(_ref) {
     future,
     window
   } = _ref;
-  let historyRef = react.useRef();
+  let historyRef = React.useRef();
   if (historyRef.current == null) {
-    historyRef.current = router_createBrowserHistory({
+    historyRef.current = createBrowserHistory({
       window,
       v5Compat: true
     });
   }
   let history = historyRef.current;
-  let [state, setStateImpl] = react.useState({
+  let [state, setStateImpl] = React.useState({
     action: history.action,
     location: history.location
   });
   let {
     v7_startTransition
   } = future || {};
-  let setState = react.useCallback(newState => {
+  let setState = React.useCallback(newState => {
     v7_startTransition && dist_startTransitionImpl ? dist_startTransitionImpl(() => setStateImpl(newState)) : setStateImpl(newState);
   }, [setStateImpl, v7_startTransition]);
-  react.useLayoutEffect(() => history.listen(setState), [history, setState]);
-  return /*#__PURE__*/react.createElement(dist_Router, {
+  React.useLayoutEffect(() => history.listen(setState), [history, setState]);
+  return /*#__PURE__*/React.createElement(Router, {
     basename: basename,
     children: children,
     location: state.location,
@@ -6294,26 +6281,26 @@ function HashRouter(_ref2) {
     future,
     window
   } = _ref2;
-  let historyRef = React.useRef();
+  let historyRef = react.useRef();
   if (historyRef.current == null) {
-    historyRef.current = createHashHistory({
+    historyRef.current = router_createHashHistory({
       window,
       v5Compat: true
     });
   }
   let history = historyRef.current;
-  let [state, setStateImpl] = React.useState({
+  let [state, setStateImpl] = react.useState({
     action: history.action,
     location: history.location
   });
   let {
     v7_startTransition
   } = future || {};
-  let setState = React.useCallback(newState => {
+  let setState = react.useCallback(newState => {
     v7_startTransition && dist_startTransitionImpl ? dist_startTransitionImpl(() => setStateImpl(newState)) : setStateImpl(newState);
   }, [setStateImpl, v7_startTransition]);
-  React.useLayoutEffect(() => history.listen(setState), [history, setState]);
-  return /*#__PURE__*/React.createElement(Router, {
+  react.useLayoutEffect(() => history.listen(setState), [history, setState]);
+  return /*#__PURE__*/react.createElement(dist_Router, {
     basename: basename,
     children: children,
     location: state.location,
@@ -6776,6 +6763,7 @@ function createFetcherForm(fetcherKey, routeId) {
   return FetcherForm;
 }
 let fetcherId = 0;
+// TODO: (v7) Change the useFetcher generic default from `any` to `unknown`
 /**
  * Interacts with route loaders and actions without causing a navigation. Great
  * for any interaction that stays on the same page.
@@ -7067,7 +7055,14 @@ var Contacts = function Contacts() {
   return /*#__PURE__*/react.createElement("div", null, /*#__PURE__*/react.createElement("h2", null, "\u041A\u043E\u043D\u0442\u0430\u043A\u0442\u043D\u0430 \u0456\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0456\u044F"), /*#__PURE__*/react.createElement("p", null, "\u0410\u0434\u0440\u0435\u0441\u0430: \u0432\u0443\u043B. \u041F\u0430\u0443\u0441\u0442\u043E\u0432\u0441\u043A\u043E\u0433\u043E, 65111, \u043C.\u041E\u0434\u0435\u0441\u0430"), /*#__PURE__*/react.createElement("p", null, "\u0422\u0435\u043B\u0435\u0444\u043E\u043D: +1234567890"), /*#__PURE__*/react.createElement("p", null, "Email: francev.dima@gmail.com"));
 };
 /* harmony default export */ const contacts = (Contacts);
+;// CONCATENATED MODULE: ./src/components/ErrorPage.jsx
+
+var ErrorPage = function ErrorPage() {
+  return /*#__PURE__*/react.createElement("div", null, /*#__PURE__*/react.createElement("h2", null, "\u041F\u043E\u043C\u0438\u043B\u043A\u0430 404"), /*#__PURE__*/react.createElement("p", null, "\u0421\u0442\u043E\u0440\u0456\u043D\u043A\u0443 \u043D\u0435 \u0437\u043D\u0430\u0439\u0434\u0435\u043D\u043E."));
+};
+/* harmony default export */ const components_ErrorPage = (ErrorPage);
 ;// CONCATENATED MODULE: ./src/App.jsx
+
 
 
 
@@ -7088,6 +7083,9 @@ var App = function App() {
   }), /*#__PURE__*/react.createElement(Route, {
     path: "/contacts",
     element: /*#__PURE__*/react.createElement(contacts, null)
+  }), /*#__PURE__*/react.createElement(Route, {
+    path: "*",
+    element: /*#__PURE__*/react.createElement(components_ErrorPage, null)
   })));
 };
 ;// CONCATENATED MODULE: ./src/index.jsx
@@ -7098,7 +7096,7 @@ var App = function App() {
 
 var root = document.getElementById("root");
 var rootElement = (0,client/* createRoot */.s)(root);
-rootElement.render( /*#__PURE__*/react.createElement(react.StrictMode, null, /*#__PURE__*/react.createElement(BrowserRouter, null, /*#__PURE__*/react.createElement(App, null))));
+rootElement.render( /*#__PURE__*/react.createElement(react.StrictMode, null, /*#__PURE__*/react.createElement(HashRouter, null, /*#__PURE__*/react.createElement(App, null))));
 })();
 
 /******/ })()
